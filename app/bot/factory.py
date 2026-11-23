@@ -52,7 +52,10 @@ def create_dispatcher(app: AppContext) -> Dispatcher:
 async def sync_commands(bot: Bot, settings: Settings) -> None:
     private = private_commands()
     await bot.set_my_commands(private, scope=BotCommandScopeAllPrivateChats())
-    await bot.set_my_commands(admin_group_commands(), scope=BotCommandScopeAllChatAdministrators())
+    await bot.set_my_commands(
+        admin_group_commands(settings.ephemeral_mode_enabled),
+        scope=BotCommandScopeAllChatAdministrators(),
+    )
     group = group_commands(settings.ephemeral_mode_enabled)
     if group:
         await bot.set_my_commands(group, scope=BotCommandScopeAllGroupChats())

@@ -25,7 +25,8 @@ async def link_group(message: Message, session, app: AppContext) -> None:
         return
     await ChatService(session, app.settings).upsert(message.chat.id, message.chat.title)
     await message.answer(
-        "Группа подключена. Пишите боту в личные сообщения: в группе появится псевдоним, а не ваше имя."
+        "Группа подключена. В теме напишите одним сообщением /anon и текст. "
+        "Фото и файлы отправляйте боту в личные сообщения."
     )
 
 

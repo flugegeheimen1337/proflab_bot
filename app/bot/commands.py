@@ -25,5 +25,9 @@ def group_commands(ephemeral_enabled: bool) -> list[BotCommand]:
     return [BotCommand(command="anon", description="Написать в эту тему анонимно", is_ephemeral=True)]
 
 
-def admin_group_commands() -> list[BotCommand]:
-    return [BotCommand(command="link_group", description="Подключить эту группу")]
+def admin_group_commands(ephemeral_enabled: bool) -> list[BotCommand]:
+    # Administrators resolve this scope before the all-groups list.
+    # Without /anon here, an admin's client sends the command as a normal visible message.
+    commands = list(group_commands(ephemeral_enabled))
+    commands.append(BotCommand(command="link_group", description="Подключить эту группу"))
+    return commands

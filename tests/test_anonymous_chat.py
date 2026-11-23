@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import inspect as sa_inspect
 
-from app.bot.commands import group_commands, private_commands
+from app.bot.commands import admin_group_commands, group_commands, private_commands
 from app.bot.factory import build_routers
 from app.bot.texts import privacy_text
 from app.core.config import get_settings
@@ -421,6 +421,10 @@ def test_ephemeral_policy_and_commands():
     assert all(command.command != "anon" for command in private_commands())
     assert group_commands(False) == []
     assert group_commands(True)[0].is_ephemeral is True
+    admin_commands = admin_group_commands(True)
+    assert any(command.command == "anon" and command.is_ephemeral for command in admin_commands)
+    assert any(command.command == "link_group" for command in admin_commands)
+    assert all(command.command != "anon" for command in admin_group_commands(False))
     names = [item.name for item in build_routers(get_settings())]
     assert "intercept" not in names
     assert "ephemeral" in names
