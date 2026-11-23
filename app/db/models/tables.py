@@ -97,6 +97,7 @@ class Message(Base):
     update_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     reply_to_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("messages.id"))
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    telegram_thread_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = _ts()

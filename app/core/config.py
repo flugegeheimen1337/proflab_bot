@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     admin_ids: str = ""
     default_group_id: int | None = None
     timezone: str = "Europe/Moscow"
-    ephemeral_mode_enabled: bool = False
+    ephemeral_mode_enabled: bool = True
     intercept_mode_enabled: bool = False
     reveal_telegram_ids: bool = False
     log_level: str = "INFO"

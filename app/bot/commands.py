@@ -22,7 +22,7 @@ def private_commands() -> list[BotCommand]:
 def group_commands(ephemeral_enabled: bool) -> list[BotCommand]:
     if not ephemeral_enabled:
         return []
-    return [BotCommand(command="anon", description="Анонимное сообщение", is_ephemeral=True)]
+    return [BotCommand(command="anon", description="Написать в эту тему анонимно", is_ephemeral=True)]
 
 
 def admin_group_commands() -> list[BotCommand]:

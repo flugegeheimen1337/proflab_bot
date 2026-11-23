@@ -81,6 +81,7 @@ class MessageService:
         reply_code: str | None = None,
         reply_to_telegram_message_id: int | None = None,
         update_id: int | None = None,
+        telegram_thread_id: int | None = None,
     ) -> AcceptResult:
         if update_id is not None:
             existing = await self.store.message_by_update(update_id)
@@ -144,6 +145,7 @@ class MessageService:
             source_message_id=source_message_id,
             update_id=update_id,
             reply_to_id=reply_to_id,
+            telegram_thread_id=telegram_thread_id,
             status=QUEUED,
         )
         try:

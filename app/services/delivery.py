@@ -135,6 +135,7 @@ class DeliveryService:
                 file_id=message.file_id,
                 filename=message.neutral_filename,
                 reply_to_message_id=reply_to,
+                message_thread_id=message.telegram_thread_id,
                 buttons=tuple(
                     publication_buttons(message.public_code, self.bot_username, self.settings.secret())
                 ),

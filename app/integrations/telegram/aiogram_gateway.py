@@ -82,11 +82,13 @@ class AiogramGateway:
                 allow_sending_without_reply=True,
             )
         keyboard = markup(outgoing.buttons)
+        thread = outgoing.message_thread_id
         try:
             if outgoing.kind == "text":
                 sent = await self.bot.send_message(
                     outgoing.chat_id,
                     outgoing.text,
+                    message_thread_id=thread,
                     reply_markup=keyboard,
                     reply_parameters=reply,
                     link_preview_options=_PREVIEW_OFF,
@@ -96,6 +98,7 @@ class AiogramGateway:
                     outgoing.chat_id,
                     photo=outgoing.file_id,
                     caption=outgoing.text,
+                    message_thread_id=thread,
                     reply_markup=keyboard,
                     reply_parameters=reply,
                 )
@@ -106,6 +109,7 @@ class AiogramGateway:
                         outgoing.chat_id,
                         video=payload,
                         caption=outgoing.text,
+                        message_thread_id=thread,
                         reply_markup=keyboard,
                         reply_parameters=reply,
                     )
@@ -114,6 +118,7 @@ class AiogramGateway:
                         outgoing.chat_id,
                         document=payload,
                         caption=outgoing.text,
+                        message_thread_id=thread,
                         reply_markup=keyboard,
                         reply_parameters=reply,
                     )

@@ -49,6 +49,7 @@ class Outgoing:
     file_id: str | None = None
     filename: str | None = None
     reply_to_message_id: int | None = None
+    message_thread_id: int | None = None
     buttons: tuple[Button, ...] = ()
 
 

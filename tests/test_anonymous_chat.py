@@ -116,6 +116,7 @@ async def test_message_idempotency_reply_and_no_telegram_id(database):
         source_chat_id=USER,
         source_message_id=10,
         update_id=77,
+        telegram_thread_id=555,
     )
     duplicate = await service.accept(
         telegram_user_id=USER,
@@ -145,6 +146,7 @@ async def test_message_idempotency_reply_and_no_telegram_id(database):
     await delivery.deliver(first.message.id)
     await delivery.deliver(first.message.id)
     assert len(fake.sent) == 1
+    assert fake.sent[0].message_thread_id == 555
     assert str(USER) not in fake.sent[0].text
     assert "<b>" not in fake.sent[0].text.split("\n", 1)[-1]
     assert "tg://user" not in fake.sent[0].text

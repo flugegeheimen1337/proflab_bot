@@ -79,6 +79,7 @@ async def anon(message: Message, command, session, app: AppContext, update_id: i
             source_message_id=source_id,
             reply_to_telegram_message_id=reply_to,
             update_id=update_id,
+            telegram_thread_id=message.message_thread_id,
         )
     except DomainError as exc:
         await _hint(app, message.from_user.id, explain_error(exc))
