@@ -22,6 +22,7 @@ class Chat(Base):
     public_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     title: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_room: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = _ts()
 
 
@@ -103,6 +104,22 @@ class Message(Base):
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MessageCopy(Base):
+    """One recipient's private copy of a room message. Telegram id here is the copy, not the author."""
+
+    __tablename__ = "message_copies"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_copy_recipient"),
+        UniqueConstraint("user_id", "telegram_message_id", name="uq_copy_telegram"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("messages.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    telegram_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = _ts()
 
 
 class Report(Base):

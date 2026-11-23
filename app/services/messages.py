@@ -103,12 +103,13 @@ class MessageService:
         if await self.moderation.chat_banned(user, chat):
             raise UserBanned()
 
-        member = await self.telegram.get_member(chat.telegram_chat_id, telegram_user_id)
-        if not member.allows(content_type):
-            raise NotAMember()
-        bot_member = await self.telegram.get_member(chat.telegram_chat_id, self.bot_id)
-        if not bot_member.can_send_messages:
-            raise GroupUnavailable()
+        if not chat.is_room:
+            member = await self.telegram.get_member(chat.telegram_chat_id, telegram_user_id)
+            if not member.allows(content_type):
+                raise NotAMember()
+            bot_member = await self.telegram.get_member(chat.telegram_chat_id, self.bot_id)
+            if not bot_member.can_send_messages:
+                raise GroupUnavailable()
 
         settings_row = await self._settings(chat)
         await self._antispam(user, chat, settings_row)
@@ -182,7 +183,12 @@ class MessageService:
         if user is None or message.author_id != user.id:
             return "forbidden"
         chat = await self.store.chat_by_id(message.chat_id)
-        if chat and message.telegram_message_id:
+        if chat and chat.is_room:
+            for copy in await self.store.copies_for_message(message.id):
+                recipient = await self.store.user_by_id(copy.user_id)
+                if recipient and recipient.telegram_id:
+                    await self.telegram.delete_message(recipient.telegram_id, copy.telegram_message_id)
+        elif chat and message.telegram_message_id:
             await self.telegram.delete_message(chat.telegram_chat_id, message.telegram_message_id)
         message.status = DELETED
         message.updated_at = now_utc()

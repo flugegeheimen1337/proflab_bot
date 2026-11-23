@@ -19,6 +19,7 @@ from app.db.models import (
     ChatSettings,
     FailedJob,
     Message,
+    MessageCopy,
     Report,
     User,
 )
@@ -44,7 +45,29 @@ class Store:
         return await self.session.scalar(select(Chat).where(Chat.public_code == code))
 
     async def active_chats(self) -> list[Chat]:
-        rows = await self.session.scalars(select(Chat).where(Chat.is_active.is_(True)).order_by(Chat.created_at))
+        rows = await self.session.scalars(
+            select(Chat).where(Chat.is_active.is_(True), Chat.is_room.is_(False)).order_by(Chat.created_at)
+        )
+        return list(rows)
+
+    async def room(self) -> Chat | None:
+        return await self.session.scalar(select(Chat).where(Chat.is_room.is_(True)))
+
+    async def copy_for_recipient(self, message_id: uuid.UUID, user_id: uuid.UUID) -> MessageCopy | None:
+        return await self.session.scalar(
+            select(MessageCopy).where(MessageCopy.message_id == message_id, MessageCopy.user_id == user_id)
+        )
+
+    async def copy_by_telegram(self, user_id: uuid.UUID, telegram_message_id: int) -> MessageCopy | None:
+        return await self.session.scalar(
+            select(MessageCopy).where(
+                MessageCopy.user_id == user_id,
+                MessageCopy.telegram_message_id == telegram_message_id,
+            )
+        )
+
+    async def copies_for_message(self, message_id: uuid.UUID) -> list[MessageCopy]:
+        rows = await self.session.scalars(select(MessageCopy).where(MessageCopy.message_id == message_id))
         return list(rows)
 
     async def alias_for_user(self, chat_id: uuid.UUID, user_id: uuid.UUID) -> Alias | None:

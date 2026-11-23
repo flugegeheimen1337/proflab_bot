@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.time import now_utc
-from app.db.models import Alias, FailedJob
+from app.db.models import Alias, FailedJob, MessageCopy
 from app.db.repositories.store import Store
 from app.integrations.telegram.gateway import Outgoing, TelegramGateway
 from app.services.buttons import delete_buttons, publication_buttons
-from app.services.errors import TemporaryTelegramError
+from app.services.errors import BotBlocked, TemporaryTelegramError
 from app.services.formatting import render_public, safe_error
 from app.services.limiter import GroupSendLimiter, decr_floor
 
@@ -52,6 +52,10 @@ class DeliveryService:
             outgoing, meta = prepared
             author_id = meta["author_id"]
             chat_id = meta["chat_id"]
+            if meta.get("is_room"):
+                await self._fanout(message_id, outgoing, meta)
+                finished = True
+                return
             for _ in range(25):
                 if await self.limiter.acquire(meta["telegram_chat_id"]):
                     break
@@ -145,8 +149,77 @@ class DeliveryService:
                 "chat_id": message.chat_id,
                 "telegram_chat_id": chat.telegram_chat_id,
                 "alias_label": alias.label,
+                "is_room": chat.is_room,
             }
             return outgoing, meta
+        finally:
+            await session.close()
+
+    async def _fanout(self, message_id: uuid.UUID, outgoing: Outgoing, meta: dict) -> None:
+        from app.services.moderation import ModerationService
+
+        session = self.session_factory()
+        sent = 0
+        try:
+            store = Store(session)
+            message = await store.message_by_id(message_id)
+            chat = await store.chat_by_id(meta["chat_id"]) if message is not None else None
+            if message is None or chat is None or message.status in FINISHED:
+                return
+            moderation = ModerationService(session)
+            for user in await store.deliverable_users():
+                if user.id == message.author_id or user.telegram_id is None:
+                    continue
+                if await moderation.chat_banned(user, chat):
+                    continue
+                if await store.copy_for_recipient(message.id, user.id):
+                    sent += 1
+                    continue
+                reply_to = None
+                if message.reply_to_id:
+                    parent_copy = await store.copy_for_recipient(message.reply_to_id, user.id)
+                    parent_message = await store.message_by_id(message.reply_to_id)
+                    if parent_copy is not None:
+                        reply_to = parent_copy.telegram_message_id
+                    elif parent_message is not None and parent_message.source_user_id == user.telegram_id:
+                        reply_to = parent_message.source_message_id
+                personal = Outgoing(
+                    chat_id=user.telegram_id,
+                    kind=outgoing.kind,
+                    text=outgoing.text,
+                    file_id=outgoing.file_id,
+                    filename=outgoing.filename,
+                    reply_to_message_id=reply_to,
+                    buttons=outgoing.buttons,
+                )
+                try:
+                    telegram_message_id = await self.telegram.send(personal)
+                except BotBlocked:
+                    user.bot_blocked = True
+                    await session.commit()
+                    continue
+                except TemporaryTelegramError:
+                    await session.commit()
+                    raise
+                session.add(
+                    MessageCopy(message_id=message.id, user_id=user.id, telegram_message_id=telegram_message_id)
+                )
+                await session.commit()
+                sent += 1
+            message.status = "published"
+            message.published_at = now_utc()
+            message.updated_at = now_utc()
+            await session.commit()
+            author = await store.user_by_id(message.author_id)
+            if author and author.telegram_id:
+                if sent:
+                    text = f"Сообщение разослано как {meta['alias_label']}. Получателей: {sent}."
+                else:
+                    text = f"Вы {meta['alias_label']}. Пока получателей нет: остальные должны нажать /start."
+                try:
+                    await self.telegram.send_dm(author.telegram_id, text)
+                except Exception:
+                    logger.warning("room receipt was not delivered")
         finally:
             await session.close()
 

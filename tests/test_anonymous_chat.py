@@ -317,6 +317,60 @@ async def test_delete_requires_author(database):
     assert fake.deleted
 
 
+async def test_room_fanout_reaches_others_and_threads_reply(database):
+    session, factory = database
+    settings = get_settings()
+    room = await ChatService(session, settings).ensure_room()
+    await UserService(session).register(777)
+    await session.commit()
+    fake = FakeTelegram()
+    redis = FakeRedis()
+    queue = InlineQueue()
+    service, settings, _factory = _stack(session, factory, fake, redis, queue)
+    first = await service.accept(
+        telegram_user_id=USER,
+        chat=room,
+        content_type="text",
+        body="в комнате",
+        file_id=None,
+        original_filename=None,
+        file_size=None,
+        source="private",
+        source_chat_id=USER,
+        source_message_id=1,
+    )
+    delivery = DeliveryService(
+        factory,
+        settings=settings,
+        telegram=fake,
+        redis=redis,
+        limiter=GroupSendLimiter(redis, 0, 20),
+        bot_username="anon_test_bot",
+    )
+    await delivery.deliver(first.message.id)
+    assert [item.chat_id for item in fake.sent] == [777]
+    assert str(USER) not in fake.sent[0].text
+    assert first.alias_label in fake.sent[0].text
+    reply = await service.accept(
+        telegram_user_id=777,
+        chat=room,
+        content_type="text",
+        body="ответ",
+        file_id=None,
+        original_filename=None,
+        file_size=None,
+        source="private",
+        source_chat_id=777,
+        source_message_id=2,
+        reply_code=first.message.public_code,
+    )
+    await delivery.deliver(reply.message.id)
+    assert fake.sent[-1].chat_id == USER
+    assert fake.sent[-1].reply_to_message_id == 1
+    await delivery.deliver(first.message.id)
+    assert [item.chat_id for item in fake.sent].count(777) == 1
+
+
 async def test_broadcast_skips_blocked_and_is_idempotent(database):
     session, _factory = database
     settings = get_settings()

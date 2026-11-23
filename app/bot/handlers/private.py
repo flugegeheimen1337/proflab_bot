@@ -65,6 +65,19 @@ async def _eligible(message: Message, session, app: AppContext, telegram_id: int
     return allowed
 
 
+async def _room_reply_code(session, user, message: Message) -> str | None:
+    if message.reply_to_message is None:
+        return user.pending_reply_code
+    store = Store(session)
+    copy = await store.copy_by_telegram(user.id, message.reply_to_message.message_id)
+    parent = await store.message_by_id(copy.message_id) if copy is not None else None
+    if parent is None and user.telegram_id is not None:
+        parent = await store.message_by_source(message.chat.id, user.telegram_id, message.reply_to_message.message_id)
+    if parent is None:
+        return user.pending_reply_code
+    return parent.public_code
+
+
 async def bind_chats(message: Message, session, app: AppContext, user) -> None:
     if user.telegram_id is None:
         return
@@ -95,14 +108,17 @@ async def start(message: Message, command, session, app: AppContext, state: FSMC
     payload = (command.args or "").strip()
     if payload.startswith("r_"):
         await UserService(session).set_pending_reply(user, payload[2:])
-        await message.answer("Следующее сообщение будет ответом в группе. /cancel отменяет ответ.")
+        await message.answer("Следующее сообщение будет ответом в чате. /cancel отменяет ответ.")
     if created:
         await message.answer(WELCOME)
     elif restored:
         await message.answer("Запись восстановлена с прежним псевдонимом.\n\n" + WELCOME)
     elif not payload.startswith("r_"):
-        await message.answer("Можно писать сообщение или открыть /chats.")
-    await bind_chats(message, session, app, user)
+        await message.answer("Напишите сообщение сюда. Его копия уйдёт остальным участникам.")
+    room = await ChatService(session, app.settings).ensure_room()
+    await UserService(session).set_active_chat(user, room)
+    alias = await AliasService(session).ensure(user, room)
+    await message.answer(f"Вы {alias.label}. Пишите следующим сообщением.")
 
 
 @router.message(Command("help"), F.chat.type == "private")
@@ -135,7 +151,9 @@ async def chats_cmd(message: Message, session, app: AppContext) -> None:
     if message.from_user is None:
         return
     user = await UserService(session).require(message.from_user.id)
-    await bind_chats(message, session, app, user)
+    room = await ChatService(session, app.settings).ensure_room()
+    alias = await AliasService(session).ensure(user, room)
+    await message.answer(f"Переписка идёт в этом чате. Вы {alias.label}.")
 
 
 @router.message(Command("alias"), F.chat.type == "private")
@@ -143,15 +161,9 @@ async def alias_cmd(message: Message, session, app: AppContext) -> None:
     if message.from_user is None:
         return
     user = await UserService(session).require(message.from_user.id)
-    if user.active_chat_id is None:
-        await message.answer("Сначала выберите группу: /chats")
-        return
-    chat = await Store(session).chat_by_id(user.active_chat_id)
-    if chat is None:
-        await message.answer("Группа не найдена. /chats")
-        return
-    alias = await AliasService(session).ensure(user, chat)
-    await message.answer(f"В этой группе вы {alias.label}. Сменить псевдоним нельзя.")
+    room = await ChatService(session, app.settings).ensure_room()
+    alias = await AliasService(session).ensure(user, room)
+    await message.answer(f"Вы {alias.label}. Сменить псевдоним нельзя.")
 
 
 @router.message(Command("delete_my_data"), F.chat.type == "private")
@@ -180,13 +192,7 @@ async def incoming(message: Message, session, app: AppContext, update_id: int | 
     if user.erased_at is not None:
         await message.answer(explain_error_code("erased"))
         return
-    if user.active_chat_id is None:
-        await message.answer("Сначала выберите группу: /chats")
-        return
-    chat = await Store(session).chat_by_id(user.active_chat_id)
-    if chat is None or not chat.is_active:
-        await message.answer("Группа не подключена. Откройте /chats.")
-        return
+    chat = await ChatService(session, app.settings).ensure_room()
     service = MessageService(
         session,
         settings=app.settings,
@@ -202,7 +208,7 @@ async def incoming(message: Message, session, app: AppContext, update_id: int | 
             source="private",
             source_chat_id=message.chat.id,
             source_message_id=message.message_id,
-            reply_code=user.pending_reply_code,
+            reply_code=await _room_reply_code(session, user, message),
             update_id=update_id,
             **content,
         )

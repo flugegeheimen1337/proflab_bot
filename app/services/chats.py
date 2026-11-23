@@ -18,11 +18,40 @@ _SPAM_RANGES = {
 _CONTENT_TYPES = {"text", "photo", "video", "document"}
 
 
+ROOM_TELEGRAM_ID = 0
+
+
 class ChatService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self.session = session
         self.settings = settings
         self.store = Store(session)
+
+    async def ensure_room(self) -> Chat:
+        chat = await self.store.room()
+        if chat is not None:
+            return chat
+        chat = Chat(
+            telegram_chat_id=ROOM_TELEGRAM_ID,
+            public_code=new_public_code(),
+            title="Комната",
+            is_active=True,
+            is_room=True,
+        )
+        self.session.add(chat)
+        await self.session.flush()
+        self.session.add(
+            ChatSettings(
+                chat_id=chat.id,
+                messages_per_minute=self.settings.messages_per_minute,
+                max_message_length=self.settings.max_message_length,
+                allowed_types=self.settings.allowed_types,
+                spam_block_seconds=self.settings.spam_block_seconds,
+                max_queue_per_user=self.settings.max_queue_per_user,
+            )
+        )
+        await self.session.flush()
+        return chat
 
     async def upsert(self, telegram_chat_id: int, title: str | None) -> Chat:
         chat = await self.store.chat_by_telegram(telegram_chat_id)

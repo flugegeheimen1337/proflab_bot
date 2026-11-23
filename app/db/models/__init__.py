@@ -10,6 +10,7 @@ from app.db.models.tables import (
     ChatSettings,
     FailedJob,
     Message,
+    MessageCopy,
     Report,
     User,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "ChatSettings",
     "FailedJob",
     "Message",
+    "MessageCopy",
     "Report",
     "User",
 ]
